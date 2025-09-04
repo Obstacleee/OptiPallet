@@ -1,0 +1,126 @@
+# Fichier: plc_controller.py
+
+import sys
+import time
+from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
+from pymodbus.constants import Endian
+
+# --- CONFIGURATION DU CLIENT ---
+# L'IP de l'automate (ou du simulateur s'il tourne)
+PLC_IP = "192.168.1.79"
+PLC_PORT = 1502
+UNIT_ID = 10
+
+# Adresses des registres (départ, 32 bits)
+REG_STATUS = 400
+REG_BOX_L = 402
+REG_PALLET_L = 408
+REG_TEMPLATE_COUNT = 420
+REG_TEMPLATE_REQUEST = 422
+REG_ERROR = 500
+
+# Ordre des octets/mots (doit correspondre au watcher)
+BYTE_ORDER = Endian.Big
+WORD_ORDER = Endian.Little
+
+
+def main():
+    """Interface de commande pour piloter le watcher via l'automate."""
+
+    client = ModbusTcpClient(host=PLC_IP, port=PLC_PORT)
+    print(f"--- CONTRÔLEUR D'AUTOMATE ---")
+    print(f"Tentative de connexion à {PLC_IP}:{PLC_PORT}...")
+
+    if not client.connect():
+        print(f"❌ Échec de la connexion. Vérifiez l'adresse IP et que l'automate est accessible.")
+        return
+
+    print("✅ Connexion réussie.")
+
+    while True:
+        print("\nCommandes disponibles:")
+        print("  dims        - Écrire les dimensions de la palette et des cartons")
+        print("  send <cmd>  - Envoyer une commande de statut (ex: 'send 1')")
+        print("  req <id>    - Spécifier le numéro de template à afficher (ex: 'req 2')")
+        print("  stat        - Lire le statut actuel (registre 400)")
+        print("  count       - Lire le nombre de templates disponibles (registre 420)")
+        print("  error       - Lire le statut d'erreur (registre 500)")
+        print("  exit        - Quitter")
+
+        try:
+            cmd = input("> ").lower().split()
+            if not cmd: continue
+
+            if cmd[0] == 'dims':
+                p_l = float(input("  Palette Longueur (ex: 1200): "))
+                p_w = float(input("  Palette Largeur (ex: 800): "))
+                b_l = float(input("  Carton Longueur (ex: 325): "))
+                b_w = float(input("  Carton Largeur (ex: 220): "))
+                b_h = float(input("  Carton Hauteur (ex: 300): "))
+
+                builder = BinaryPayloadBuilder(byteorder=BYTE_ORDER, wordorder=WORD_ORDER)
+                builder.add_32bit_float(b_l)
+                builder.add_32bit_float(b_w)
+                builder.add_32bit_float(b_h)
+                builder.add_32bit_float(p_l)
+                builder.add_32bit_float(p_w)
+
+                print(f"-> Écriture des dimensions à l'adresse {REG_BOX_L}...")
+                client.write_registers(REG_BOX_L, builder.to_registers(), unit=UNIT_ID)
+                print("  -> Dimensions envoyées.")
+
+            elif cmd[0] == 'send' and len(cmd) > 1:
+                command_id = int(cmd[1])
+                builder = BinaryPayloadBuilder(byteorder=BYTE_ORDER, wordorder=WORD_ORDER)
+                builder.add_32bit_int(command_id)
+                print(f"-> Envoi de la commande {command_id} au registre de statut {REG_STATUS}...")
+                client.write_registers(REG_STATUS, builder.to_registers(), unit=UNIT_ID)
+                print("  -> Commande envoyée.")
+
+            elif cmd[0] == 'req' and len(cmd) > 1:
+                template_id = int(cmd[1])
+                builder = BinaryPayloadBuilder(byteorder=BYTE_ORDER, wordorder=WORD_ORDER)
+                builder.add_32bit_int(template_id)
+                print(f"-> Définition du template demandé à {template_id} (registre {REG_TEMPLATE_REQUEST})...")
+                client.write_registers(REG_TEMPLATE_REQUEST, builder.to_registers(), unit=UNIT_ID)
+                print("  -> Numéro envoyé.")
+
+            elif cmd[0] == 'stat':
+                rr = client.read_holding_registers(REG_STATUS, 2, unit=UNIT_ID)
+                decoder = BinaryPayloadDecoder.fromRegisters(rr.registers, byteorder=BYTE_ORDER, wordorder=WORD_ORDER)
+                status = decoder.decode_32bit_int()
+                print(f"--- Statut actuel (Reg {REG_STATUS}): {status}")
+
+            elif cmd[0] == 'count':
+                rr = client.read_holding_registers(REG_TEMPLATE_COUNT, 2, unit=UNIT_ID)
+                decoder = BinaryPayloadDecoder.fromRegisters(rr.registers, byteorder=BYTE_ORDER, wordorder=WORD_ORDER)
+                count = decoder.decode_32bit_int()
+                print(f"--- Nombre de templates disponibles (Reg {REG_TEMPLATE_COUNT}): {count}")
+
+            elif cmd[0] == 'error':
+                rr = client.read_holding_registers(REG_ERROR, 2, unit=UNIT_ID)
+                decoder = BinaryPayloadDecoder.fromRegisters(rr.registers, byteorder=BYTE_ORDER, wordorder=WORD_ORDER)
+                error_status = decoder.decode_32bit_int()
+                print(f"--- Statut d'erreur (Reg {REG_ERROR}): {error_status} (0=OK, 1=Erreur)")
+
+            elif cmd[0] == 'exit':
+                break
+
+            else:
+                print("Commande non reconnue.")
+
+        except (ValueError, IndexError):
+            print("Erreur de saisie. Veuillez respecter le format des commandes.")
+        except Exception as e:
+            print(f"Erreur de communication Modbus : {e}")
+            print("Tentative de reconnexion...")
+            client.close()
+            client.connect()
+
+    client.close()
+    print("--- Connexion fermée. Arrêt du contrôleur. ---")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,6 @@
 # OptiPallet 📦
 
 ![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)
-![License]([https://img.shields.io/badge/license-MIT-green.svg](https://img.shields.io/github/license/Obstacleee/OptiPallet))
 
 Moteur d'optimisation de palettisation 2D en Python (avec Google OR-Tools) doté d'une interface Modbus TCP pour une intégration directe avec des automates industriels (PLC).
 

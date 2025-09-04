@@ -1,0 +1,35 @@
+{
+    "plc": {
+        "ip": "192.168.1.79",
+        "port": 1502,
+        "unit_id": 10,
+        "byte_order": "Big",
+        "word_order": "Little"
+    },
+    "database": {
+        "host": "localhost",
+        "user": "votre_utilisateur",
+        "password": "votre_mot_de_passe",
+        "db": "pallet_optimizer"
+    },
+    "modbus_addresses": {
+        "status": 400,
+        "box_l": 402,
+        "box_w": 404,
+        "box_h": 406,
+        "pallet_l": 408,
+        "pallet_w": 410,
+        "template_count": 420,
+        "template_request": 422,
+        "error_status": 500,
+        "layer1_start": 0,
+        "layer2_start": 200
+    },
+    "engine": {
+        "workers": 4,
+        "num_solutions_to_find": 5
+    },
+    "watcher": {
+        "polling_interval_seconds": 2
+    }
+}
